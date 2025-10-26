@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Review Analyzer // Web3 UI</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Chart.js CDN for Visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        /* Custom Tailwind Configuration for Deep Purple Theme */
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'dark-bg': '#0A0A0E', /* Ultra deep black */
+                        'dark-card': '#1A1A22', /* Slightly lighter card with purple hint */
+                        'accent-purple': '#A32DFF', /* Vibrant Web3 Purple */
+                        'text-light': '#e0e0e0',
+                        'text-muted': '#a0a0a0',
+                        'sentiment-pos': '#22c55e', /* Green */
+                        'sentiment-neg': '#ef4444', /* Red */
+                        'sentiment-neu': '#facc15', /* Yellow */
+                    },
+                    boxShadow: {
+                        'glow-purple': '0 0 20px rgba(163, 45, 255, 0.4)', /* Strong purple glow */
+                        'deep': '0 0 10px rgba(0, 0, 0, 0.6)',
+                    }
+                }
+            }
+        }
+    </style>
+    <style>
+        /* Base styles for a tech/dark mode look */
+        body {
+            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+            background-color: #0A0A0E; /* Deep Background */
+            color: #e0e0e0; /* Light text */
+        }
+        /* Custom styles for the clean, card-based aesthetic */
+        .card {
+            background-color: #1A1A22; /* Card Background */
+            border-radius: 12px;
+            box-shadow: 0 0 15px rgba(163, 45, 255, 0.1); /* Subtle purple base glow */
+            padding: 2.5rem;
+            border: 1px solid #333333; 
+        }
+        
+        /* 1. Button Active/Click Effect */
+        #analyze-btn {
+            background-color: #A32DFF; /* Accent Purple */
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 0 15px rgba(163, 45, 255, 0.6); /* Stronger button glow */
+        }
+        #analyze-btn:hover {
+            background-color: #9020E0; /* Darker purple on hover */
+            box-shadow: 0 0 25px rgba(163, 45, 255, 0.8);
+        }
+        #analyze-btn:active {
+            transform: scale(0.98); 
+            box-shadow: 0 0 8px rgba(163, 45, 255, 1);
+        }
+        
+        .suggestion-btn {
+            background-color: #4f46e5; /* Tailwind Indigo 600 */
+            transition: all 0.2s ease-in-out;
+        }
+        .suggestion-btn:hover {
+            background-color: #4338ca; /* Tailwind Indigo 700 */
+        }
+
+        /* 2. Textarea Focus Glow */
+        textarea, select {
+            background-color: #2d2d2d !important;
+            color: #e0e0e0 !important;
+            border-color: #333333 !important;
+            transition: all 0.3s ease;
+        }
+        textarea:focus, select:focus {
+            border-color: #A32DFF !important;
+            box-shadow: 0 0 0 3px rgba(163, 45, 255, 0.5) !important; /* Purple ring */
+        }
+
+        /* 3. Result Card Fade-in Animation */
+        @keyframes fadeInSlide {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .animate-result-show {
+            animation: fadeInSlide 0.6s ease-out forwards;
+        }
+
+        /* 4. Progress Bar Animation */
+        #progress-bar {
+            height: 8px;
+            border-radius: 4px;
+            width: 0%;
+            background-color: #A32DFF; /* Accent Purple */
+            transition: width 0.5s linear; 
+            box-shadow: 0 0 10px rgba(163, 45, 255, 0.9); /* Glowing effect */
+        }
+        
+        /* Style for the Download Link */
+        #download-link {
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            background-color: #A32DFF20; /* Light purple background */
+            color: #A32DFF;
+            border: 1px solid #A32DFF;
+            transition: background-color 0.2s;
+        }
+        #download-link:hover {
+            background-color: #A32DFF40;
+        }
+        
+        /* Style for Topic Chips with Aspect Sentiment */
+        .topic-chip {
+            display: inline-block;
+            padding: 0.4rem 0.8rem;
+            margin: 0.25rem;
+            border-radius: 9999px; /* fully rounded */
+            font-size: 0.875rem;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        /* Chart specific styling */
+        .chart-container {
+            position: relative;
+            height: 300px; /* Fixed height for better aesthetic in card */
+            width: 100%;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div class="w-full max-w-4xl space-y-8">
+        <header class="text-center">
+            <h1 class="text-5xl font-extrabold text-white flex items-center justify-center space-x-3">
+                <svg class="w-10 h-10 text-accent-purple" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0h2m4 0v-6a2 2 0 00-2-2h-2m2 8h2m4 0v-6a2 2 0 00-2-2h-2m2 8h2m0 0h3.5a2 2 0 002-2v-6a2 2 0 00-2-2H18m2 8h2"></path></svg>
+                <span class="text-accent-purple">LLM</span> Analysis <span class="text-text-light">Pipeline</span>
+            </h1>
+            <p class="text-text-muted mt-2 tracking-widest">REAL-TIME SENTIMENT, TOPIC & SUMMARIZATION MODULE</p>
+        </header>
+
+        <!-- Input Card -->
+        <div class="card">
+            <h2 class="text-xl font-semibold text-text-light mb-4 border-b border-gray-700 pb-2">01. INPUT</h2>
+            
+            <!-- Input Mode Selector -->
+            <div class="flex space-x-4 mb-4">
+                <label class="flex items-center space-x-2">
+                    <input type="radio" name="input-mode" value="single" checked class="form-radio text-accent-purple bg-gray-700 border-gray-600 focus:ring-accent-purple">
+                    <span class="text-text-light">Single Review (Text Box)</span>
+                </label>
+                <label class="flex items-center space-x-2">
+                    <input type="radio" name="input-mode" value="batch" class="form-radio text-accent-purple bg-gray-700 border-gray-600 focus:ring-accent-purple">
+                    <span class="text-text-light">Batch (CSV Upload)</span>
+                </label>
+            </div>
+            
+            <!-- Language Selector (NEW FEATURE) -->
+            <div class="mb-4">
+                <label for="language-selector" class="block text-sm font-medium text-text-muted mb-1">Select Review Language</label>
+                <select id="language-selector" class="w-full p-2 border border-gray-700 rounded-lg focus:ring-2 focus:ring-accent-purple focus:border-accent-purple transition duration-150 ease-in-out">
+                    <option value="English">English</option>
+                    <option value="Spanish">Español (Spanish)</option>
+                    <option value="French">Français (French)</option>
+                    <option value="German">Deutsch (German)</option>
+                    <option value="Japanese">日本語 (Japanese)</option>
+                    <option value="Tamil">தமிழ் (Tamil)</option>
+                </select>
+            </div>
+
+
+            <!-- Single Input (Textarea) -->
+            <div id="single-input-area">
+                <textarea id="review-input" rows="8" class="w-full p-4 border border-gray-700 rounded-lg focus:ring-2 focus:ring-accent-purple focus:border-accent-purple transition duration-150 ease-in-out font-mono text-sm"
+                    placeholder="Paste data for NLP processing (e.g., detailed customer review). Minimum 20 words."></textarea>
+            </div>
+            
+            <!-- Batch Input (File Upload) -->
+            <div id="batch-input-area" class="hidden">
+                <label class="block text-sm font-medium text-text-muted mb-2">Upload CSV File (Must contain a column named 'review' or 'text')</label>
+                <input type="file" id="csv-file-input" accept=".csv" class="w-full text-sm text-text-light file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-accent-purple file:text-white hover:file:bg-9020E0 cursor-pointer transition duration-150" />
+            </div>
+
+            <button id="analyze-btn" class="mt-4 w-full py-3 text-white font-bold rounded-xl shadow-glow-purple transition duration-150 ease-in-out">
+                // ANALYZE
+            </button>
+        </div>
+
+        <!-- Output and Loading Section -->
+        <div id="loading" class="text-center py-6 hidden">
+            <div class="w-full max-w-md mx-auto">
+                <p class="mt-3 text-accent-purple font-medium tracking-widest mb-3" id="loading-text">INITIATING LLM PIPELINE...</p>
+                <div class="w-full h-2 bg-gray-700 rounded-full">
+                    <div id="progress-bar"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="results-card" class="card hidden">
+            <h2 class="text-xl font-semibold text-text-light mb-6 border-b border-gray-700 pb-3">02. OUTPUT REPORT // Analysis Results</h2>
+            
+            <!-- Batch Results Summary/Download (visible for batch mode) -->
+            <div id="batch-summary-area" class="hidden mb-6">
+                
+                <h3 class="text-lg font-bold text-accent-purple mb-4">BATCH ANALYSIS VISUAL SUMMARY</h3>
+                
+                <!-- Chart Container -->
+                <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow-deep mb-6">
+                    <h4 class="text-text-light mb-3 font-mono">SENTIMENT DISTRIBUTION</h4>
+                    <div class="chart-container">
+                        <canvas id="sentiment-chart"></canvas>
+                    </div>
+                </div>
+
+                <div class="p-4 bg-gray-800 rounded-lg border border-gray-700">
+                    <p id="batch-status-text" class="text-text-light mb-3 font-mono"></p>
+                    <a href="#" id="download-link" download="analysis_results.csv">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        Download Annotated CSV
+                    </a>
+                </div>
+
+            </div>
+
+            <!-- Single Review Analysis (visible for single mode) -->
+            <div id="single-analysis-area">
+                <div class="grid md:grid-cols-3 gap-6">
+                    
+                    <!-- Sentiment Column -->
+                    <div class="md:col-span-1 space-y-4">
+                        <h3 class="text-lg font-medium text-text-muted mb-3 font-mono">SENTIMENT INDEX // Key Metric</h3>
+                        <div id="sentiment-output" class="p-5 rounded-xl border-2 transition duration-300 text-center space-y-2 h-full flex flex-col justify-center shadow-deep">
+                            <!-- Content injected here -->
+                        </div>
+                    </div>
+
+                    <!-- Summary and Topics Column -->
+                    <div class="md:col-span-2 space-y-6">
+                        <div id="summary-section">
+                            <h3 class="text-lg font-medium text-text-muted mb-3 font-mono">LLM SUMMARY // Core Abstraction</h3>
+                            <div id="summary-output" class="p-5 bg-gray-800 border border-gray-700 text-text-light rounded-xl min-h-[150px] transition duration-300 flex items-center shadow-deep">
+                                <!-- Content injected here -->
+                            </div>
+                        </div>
+
+                        <div id="topics-section">
+                            <h3 class="text-lg font-medium text-text-muted mb-3 font-mono">ASPECTS EXTRACTED // Key Topics</h3>
+                            <div id="topics-output" class="p-4 bg-gray-800 border border-gray-700 text-text-light rounded-xl min-h-[50px] transition duration-300 shadow-deep flex items-center flex-wrap">
+                                <!-- Content injected here -->
+                            </div>
+                        </div>
+                        
+                        <!-- Suggestion Generation Button (NEW FEATURE) -->
+                        <div class="p-4 bg-gray-800 rounded-xl border border-gray-700 shadow-deep">
+                            <h3 class="text-lg font-medium text-text-muted mb-3 font-mono">CUSTOMER SERVICE // Suggested Action</h3>
+                            <button id="suggest-response-btn" class="suggestion-btn w-full py-2 text-white font-bold rounded-lg transition duration-150 ease-in-out flex items-center justify-center space-x-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                                <span>Generate Response Draft ✨</span>
+                            </button>
+                            <div id="response-draft-output" class="mt-3 text-text-light p-3 bg-gray-900 rounded-md text-sm hidden">
+                                <!-- Draft response inserted here -->
+                            </div>
+                            <div id="suggestion-loading" class="text-accent-purple mt-3 hidden text-center">Generating...</div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Message Box for Errors/Info -->
+        <div id="message-box" class="fixed bottom-4 right-4 hidden p-4 rounded-lg shadow-xl text-sm z-50 transition-opacity duration-300" role="alert">
+            <p id="message-text" class="font-medium"></p>
+        </div>
+
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
