@@ -25,7 +25,7 @@
 // For deployment to S3 or GitHub Pages, you MUST use a serverless function
 // or backend to protect this key.
 // ========================================================================
-const apiKey = "AIzaSyCIE21TYMSAq4zkpSGdn1XWyPaKWqRWFKI"; // <--- KEY INTEGRATED HERE
+const apiKey = "Api_key"; // <--- KEY INTEGRATED HERE
 // ========================================================================
 
 
