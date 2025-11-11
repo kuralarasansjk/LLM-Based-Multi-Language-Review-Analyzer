@@ -292,15 +292,10 @@
 
     <script>
         // ========================================================================
-        // !!! IMPORTANT: PASTE YOUR API KEY BELOW !!!
+        // API calls are now routed to the Vercel backend endpoint /api/analyze.
+        // The API key is stored securely in Vercel environment variables.
         // ========================================================================
-        const apiKey = "VITE_GEMINI_API_KEY"; 
-        // ========================================================================
-
-
-        const API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
-        const MODEL_NAME = "gemini-2.5-flash-preview-09-2025";
-        const ANALYZE_ENDPOINT = `${API_BASE_URL}/${MODEL_NAME}:generateContent?key=${apiKey}`;
+        const ANALYZE_ENDPOINT = "/api/analyze";
 
         // Chart instance holder
         let sentimentChartInstance = null;
@@ -438,17 +433,16 @@
         // --- API CALL HANDLERS (Same robust logic with exponential backoff) ---
 
         async function fetchWithRetry(url, options, maxRetries = 3) {
-            // If API key is missing for local run, throw error early.
-            if (!apiKey || apiKey === "PASTE_YOUR_KEY_HERE") {
-                throw new Error("API Key Missing. Please paste your Gemini API Key in the code.");
-            }
+            // API key validation removed from frontend.
             
             for (let i = 0; i < maxRetries; i++) {
                 try {
+                    // All calls now go to the Vercel endpoint passed in 'url'
                     const response = await fetch(url, options);
                     if (response.ok) return response;
                     
                     if (response.status === 429 && i < maxRetries - 1) {
+                        // Don't log to console, just retry
                         const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
                         await new Promise(resolve => setTimeout(resolve, delay));
                         continue;
@@ -458,17 +452,14 @@
                     const errorDetails = await response.text();
                     try {
                         const jsonError = JSON.parse(errorDetails);
-                        // Enhanced error message for the 403 case
-                        if (response.status === 403) {
-                            throw new Error("403 Forbidden: Check your API Key's validity or permissions.");
-                        }
+                        // Handle errors forwarded from the backend
                         throw new Error(jsonError.error?.message || `API failed with status ${response.status}`);
                     } catch (e) {
-                         if (e.message.includes("403 Forbidden")) throw e;
                          throw new Error(`API failed with status ${response.status}: ${errorDetails.substring(0, 100)}...`);
                     }
-                   
+                    
                 } catch (error) {
+                    // Don't log retry attempts
                     if (i === maxRetries - 1) throw error;
                     const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
                     await new Promise(resolve => setTimeout(resolve, delay));
@@ -504,6 +495,8 @@
             };
 
             const payload = {
+                // Add a "task" identifier for the backend to know which operation to run
+                task: "sentiment",
                 contents: [{ parts: [{ text: `Analyze the following customer review and determine its overall sentiment: "${review}"` }] }],
                 systemInstruction: {
                     parts: [{ text: getSystemInstructionPrefix() + " Your task is to classify the overall sentiment." }]
@@ -520,10 +513,19 @@
                 body: JSON.stringify(payload)
             });
 
+            // The backend will pass through the JSON response from Gemini
             const result = await response.json();
+            
+            // Assuming backend passes the *exact* Gemini response
             const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
-            if (!jsonText) throw new Error("Could not extract sentiment JSON from API response.");
+            if (!jsonText) {
+                // Check if the backend sent an error instead
+                if (result.error) {
+                    throw new Error(result.error.message || "Backend returned an error.");
+                }
+                throw new Error("Could not extract sentiment JSON from API response.");
+            }
 
             return JSON.parse(jsonText);
         }
@@ -531,10 +533,12 @@
         // 2. Summarization (Standard Text Generation)
         async function getSummary(review) {
             const payload = {
+                task: "summary", // Task identifier
                 contents: [{ parts: [{ text: `Provide a concise, 1-2 sentence summary of the following customer review: "${review}"` }] }],
                 systemInstruction: {
                     parts: [{ text: `You are an expert review summarization engine. The review is written in ${languageSelector.value}. Ensure the summary is highly accurate and strictly limited to two sentences.` }]
                 }
+                // No generationConfig needed for simple text
             };
 
             const response = await fetchWithRetry(ANALYZE_ENDPOINT, {
@@ -544,6 +548,11 @@
             });
 
             const result = await response.json();
+            
+            if (result.error) {
+                throw new Error(result.error.message || "Backend returned an error.");
+            }
+
             return result.candidates?.[0]?.content?.parts?.[0]?.text || "No summary could be generated.";
         }
 
@@ -569,6 +578,7 @@
             };
 
             const payload = {
+                task: "aspects", // Task identifier
                 contents: [{ parts: [{ text: `Analyze the following review and extract 3 to 5 key aspects. For each aspect, provide its specific sentiment: "${review}"` }] }],
                 systemInstruction: {
                     parts: [{ text: getSystemInstructionPrefix() + " Your task is to extract aspects and their specific sentiment." }]
@@ -588,7 +598,12 @@
             const result = await response.json();
             const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
-            if (!jsonText) throw new Error("Could not extract aspects JSON from API response.");
+            if (!jsonText) {
+                if (result.error) {
+                    throw new Error(result.error.message || "Backend returned an error.");
+                }
+                throw new Error("Could not extract aspects JSON from API response.");
+            }
             
             try {
                 const aspects = JSON.parse(jsonText);
@@ -609,6 +624,7 @@
             const userPrompt = `Draft a customer service response to the following review: "${review}"`;
             
             const payload = {
+                task: "draft", // Task identifier
                 contents: [{ parts: [{ text: userPrompt }] }],
                 systemInstruction: {
                     parts: [{ text: systemInstruction }]
@@ -622,6 +638,11 @@
             });
 
             const result = await response.json();
+
+            if (result.error) {
+                throw new Error(result.error.message || "Backend returned an error.");
+            }
+
             return result.candidates?.[0]?.content?.parts?.[0]?.text || "Could not generate a response draft.";
         }
 
@@ -828,7 +849,10 @@
                                 ]);
                                 
                                 // Aggregate sentiment count
-                                sentimentCounts[sentimentResult.sentiment.toUpperCase()]++;
+                                const sentimentUpper = sentimentResult.sentiment.toUpperCase();
+                                if (sentimentCounts.hasOwnProperty(sentimentUpper)) {
+                                    sentimentCounts[sentimentUpper]++;
+                                }
 
                                 // Separate topics and aspect sentiments for CSV output
                                 const topicsString = aspectsArray.map(a => a.topic).join('; ');
@@ -946,11 +970,12 @@
                     batchSummaryArea.classList.remove('hidden');
                     
                     const failedCount = sentimentCounts.FAILED;
-                    const successCount = totalBatchItems - failedCount;
+                    const successCount = totalBatchItems - failedCount - (totalBatchItems - processedBatchItems); // Adjust for skipped
+                    const totalProcessed = processedBatchItems;
                     batchStatusText.innerHTML = `
                         Analyzed: <span class="text-accent-purple font-bold">${successCount}</span>
                         | Failed: <span class="text-red-400 font-bold">${failedCount}</span>
-                        | Total: <span class="text-text-light font-bold">${totalBatchItems}</span>
+                        | Total: <span class="text-text-light font-bold">${totalProcessed}</span>
                         <br>Download the annotated file below.`;
 
                     resultsCard.classList.remove('hidden');
@@ -962,6 +987,7 @@
                 console.error("Analysis Failed:", error);
                 completeProgressSimulation();
                 loadingDiv.classList.add('hidden');
+                // Display the error message from the backend
                 showMessage(`ERROR: ${error.message || 'API or processing failed.'}`, 'error');
             }
         });
