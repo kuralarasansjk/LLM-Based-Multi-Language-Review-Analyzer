@@ -72,15 +72,16 @@
         }
 
         /* 2. Textarea Focus Glow */
-        textarea, select {
+        textarea, select, input[type="text"] {
             background-color: #2d2d2d !important;
             color: #e0e0e0 !important;
             border-color: #333333 !important;
             transition: all 0.3s ease;
         }
-        textarea:focus, select:focus {
+        textarea:focus, select:focus, input[type="text"]:focus {
             border-color: #A32DFF !important;
             box-shadow: 0 0 0 3px rgba(163, 45, 255, 0.5) !important; /* Purple ring */
+            outline: none;
         }
 
         /* 3. Result Card Fade-in Animation */
@@ -160,17 +161,17 @@
             
             <!-- Input Mode Selector -->
             <div class="flex space-x-4 mb-4">
-                <label class="flex items-center space-x-2">
+                <label class="flex items-center space-x-2 cursor-pointer">
                     <input type="radio" name="input-mode" value="single" checked class="form-radio text-accent-purple bg-gray-700 border-gray-600 focus:ring-accent-purple">
                     <span class="text-text-light">Single Review (Text Box)</span>
                 </label>
-                <label class="flex items-center space-x-2">
+                <label class="flex items-center space-x-2 cursor-pointer">
                     <input type="radio" name="input-mode" value="batch" class="form-radio text-accent-purple bg-gray-700 border-gray-600 focus:ring-accent-purple">
                     <span class="text-text-light">Batch (CSV Upload)</span>
                 </label>
             </div>
             
-            <!-- Language Selector (NEW FEATURE) -->
+            <!-- Language Selector -->
             <div class="mb-4">
                 <label for="language-selector" class="block text-sm font-medium text-text-muted mb-1">Select Review Language</label>
                 <select id="language-selector" class="w-full p-2 border border-gray-700 rounded-lg focus:ring-2 focus:ring-accent-purple focus:border-accent-purple transition duration-150 ease-in-out">
@@ -265,14 +266,14 @@
                             </div>
                         </div>
                         
-                        <!-- Suggestion Generation Button (NEW FEATURE) -->
+                        <!-- Suggestion Generation Button -->
                         <div class="p-4 bg-gray-800 rounded-xl border border-gray-700 shadow-deep">
                             <h3 class="text-lg font-medium text-text-muted mb-3 font-mono">CUSTOMER SERVICE // Suggested Action</h3>
                             <button id="suggest-response-btn" class="suggestion-btn w-full py-2 text-white font-bold rounded-lg transition duration-150 ease-in-out flex items-center justify-center space-x-2">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                                 <span>Generate Response Draft ✨</span>
                             </button>
-                            <div id="response-draft-output" class="mt-3 text-text-light p-3 bg-gray-900 rounded-md text-sm hidden">
+                            <div id="response-draft-output" class="mt-3 text-text-light p-3 bg-gray-900 rounded-md text-sm hidden whitespace-pre-wrap">
                                 <!-- Draft response inserted here -->
                             </div>
                             <div id="suggestion-loading" class="text-accent-purple mt-3 hidden text-center">Generating...</div>
@@ -292,10 +293,14 @@
 
     <script>
         // ========================================================================
-        // API calls are now routed to the Vercel backend endpoint /api/analyze.
-        // The API key is stored securely in Vercel environment variables.
+        // GEMINI API CONFIGURATION
         // ========================================================================
-        const ANALYZE_ENDPOINT = "/api/analyze";
+        
+        // Environment Variable Name for Vercel: NEXT_PUBLIC_GEMINI_API_KEY
+        // Note: For this static HTML file to work in the browser, the key is set directly below.
+        const apiKey = "NEXT_PUBLIC_GEMINI_API_KEY"; 
+        
+        const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
 
         // Chart instance holder
         let sentimentChartInstance = null;
@@ -343,21 +348,21 @@
                 if (currentMode === 'single') {
                     singleInputArea.classList.remove('hidden');
                     batchInputArea.classList.add('hidden');
-                    suggestResponseBtn.classList.remove('hidden'); // Show response button in single mode
+                    suggestResponseBtn.classList.remove('hidden');
                 } else {
                     singleInputArea.classList.add('hidden');
                     batchInputArea.classList.remove('hidden');
-                    suggestResponseBtn.classList.add('hidden'); // Hide response button in batch mode
+                    suggestResponseBtn.classList.add('hidden');
                 }
-                resultsCard.classList.add('hidden'); // Hide results when switching mode
+                resultsCard.classList.add('hidden');
                 batchSummaryArea.classList.add('hidden');
-                singleAnalysisArea.classList.remove('hidden'); // Reset to default single view
-                responseDraftOutput.classList.add('hidden'); // Reset suggestion draft
+                singleAnalysisArea.classList.remove('hidden');
+                responseDraftOutput.classList.add('hidden');
                 responseDraftOutput.textContent = '';
             });
         });
 
-        // Utility function to display custom messages (positioned bottom-right)
+        // Utility function to display custom messages
         function showMessage(text, type = 'error') {
             messageText.textContent = text;
             messageBox.classList.remove('hidden', 'bg-red-900', 'text-red-300', 'bg-green-900', 'text-green-300', 'bg-accent-purple/90', 'text-text-light');
@@ -370,7 +375,7 @@
             } else if (type === 'info') {
                 messageBox.classList.add('bg-accent-purple/90', 'text-text-light');
             }
-            // Hide after 5 seconds
+            
             setTimeout(() => {
                 messageBox.classList.remove('opacity-100');
                 messageBox.classList.add('hidden');
@@ -398,7 +403,6 @@
             
             progressInterval = setInterval(() => {
                 if (currentMode === 'single') {
-                    // Standard single-mode simulation
                     if (progress < 95) {
                         progress += 5 + Math.random() * 5; 
                         if (progress > 95) progress = 95;
@@ -413,7 +417,6 @@
                         progressBar.style.width = `${progress}%`;
                     }
                 } else {
-                    // Batch mode progress based on real-time item count
                     if (totalBatchItems > 0) {
                         progress = (processedBatchItems / totalBatchItems) * 100;
                         progressBar.style.width = `${progress}%`;
@@ -429,37 +432,29 @@
             loadingText.textContent = 'STATE: TASK_COMPLETE: Data received.';
         }
 
+        // --- API CALL HANDLERS ---
 
-        // --- API CALL HANDLERS (Same robust logic with exponential backoff) ---
-
-        async function fetchWithRetry(url, options, maxRetries = 3) {
-            // API key validation removed from frontend.
-            
+        async function fetchWithRetry(payload, maxRetries = 3) {
             for (let i = 0; i < maxRetries; i++) {
                 try {
-                    // All calls now go to the Vercel endpoint passed in 'url'
-                    const response = await fetch(url, options);
+                    const response = await fetch(GEMINI_API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
                     if (response.ok) return response;
                     
                     if (response.status === 429 && i < maxRetries - 1) {
-                        // Don't log to console, just retry
                         const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
                         await new Promise(resolve => setTimeout(resolve, delay));
                         continue;
                     }
 
-                    // Extract detailed error message from response text if available
                     const errorDetails = await response.text();
-                    try {
-                        const jsonError = JSON.parse(errorDetails);
-                        // Handle errors forwarded from the backend
-                        throw new Error(jsonError.error?.message || `API failed with status ${response.status}`);
-                    } catch (e) {
-                         throw new Error(`API failed with status ${response.status}: ${errorDetails.substring(0, 100)}...`);
-                    }
+                    throw new Error(`API failed with status ${response.status}: ${errorDetails.substring(0, 100)}...`);
                     
                 } catch (error) {
-                    // Don't log retry attempts
                     if (i === maxRetries - 1) throw error;
                     const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
                     await new Promise(resolve => setTimeout(resolve, delay));
@@ -467,13 +462,10 @@
             }
         }
 
-        // --- Core Prompt Construction ---
         function getSystemInstructionPrefix() {
             const language = languageSelector.value;
-            // Add instruction to handle language and ensure clean JSON output
-            return `You are an expert text analyzer. The review is written in ${language}. Ensure the entire output is strictly valid JSON format.`;
+            return `You are an expert text analyzer. The review is written in ${language}. Ensure the output is strictly valid JSON format.`;
         }
-
 
         // 1. Sentiment Analysis (Structured JSON)
         async function getSentiment(review) {
@@ -491,12 +483,9 @@
                     }
                 },
                 required: ["sentiment", "confidence_score"],
-                propertyOrdering: ["sentiment", "confidence_score"]
             };
 
             const payload = {
-                // Add a "task" identifier for the backend to know which operation to run
-                task: "sentiment",
                 contents: [{ parts: [{ text: `Analyze the following customer review and determine its overall sentiment: "${review}"` }] }],
                 systemInstruction: {
                     parts: [{ text: getSystemInstructionPrefix() + " Your task is to classify the overall sentiment." }]
@@ -507,56 +496,28 @@
                 }
             };
 
-            const response = await fetchWithRetry(ANALYZE_ENDPOINT, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            // The backend will pass through the JSON response from Gemini
+            const response = await fetchWithRetry(payload);
             const result = await response.json();
-            
-            // Assuming backend passes the *exact* Gemini response
             const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-
-            if (!jsonText) {
-                // Check if the backend sent an error instead
-                if (result.error) {
-                    throw new Error(result.error.message || "Backend returned an error.");
-                }
-                throw new Error("Could not extract sentiment JSON from API response.");
-            }
-
+            if (!jsonText) throw new Error("Could not extract sentiment JSON.");
             return JSON.parse(jsonText);
         }
 
         // 2. Summarization (Standard Text Generation)
         async function getSummary(review) {
             const payload = {
-                task: "summary", // Task identifier
                 contents: [{ parts: [{ text: `Provide a concise, 1-2 sentence summary of the following customer review: "${review}"` }] }],
                 systemInstruction: {
                     parts: [{ text: `You are an expert review summarization engine. The review is written in ${languageSelector.value}. Ensure the summary is highly accurate and strictly limited to two sentences.` }]
                 }
-                // No generationConfig needed for simple text
             };
 
-            const response = await fetchWithRetry(ANALYZE_ENDPOINT, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
+            const response = await fetchWithRetry(payload);
             const result = await response.json();
-            
-            if (result.error) {
-                throw new Error(result.error.message || "Backend returned an error.");
-            }
-
             return result.candidates?.[0]?.content?.parts?.[0]?.text || "No summary could be generated.";
         }
 
-        // 3. Aspect-Based Topic Extraction (Structured JSON - ADVANCED FEATURE)
+        // 3. Aspect-Based Topic Extraction (Structured JSON)
         async function getAspects(review) {
             const aspectSchema = {
                 type: "ARRAY",
@@ -578,7 +539,6 @@
             };
 
             const payload = {
-                task: "aspects", // Task identifier
                 contents: [{ parts: [{ text: `Analyze the following review and extract 3 to 5 key aspects. For each aspect, provide its specific sentiment: "${review}"` }] }],
                 systemInstruction: {
                     parts: [{ text: getSystemInstructionPrefix() + " Your task is to extract aspects and their specific sentiment." }]
@@ -589,32 +549,21 @@
                 }
             };
 
-            const response = await fetchWithRetry(ANALYZE_ENDPOINT, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
+            const response = await fetchWithRetry(payload);
             const result = await response.json();
             const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
-            if (!jsonText) {
-                if (result.error) {
-                    throw new Error(result.error.message || "Backend returned an error.");
-                }
-                throw new Error("Could not extract aspects JSON from API response.");
-            }
+            if (!jsonText) throw new Error("Could not extract aspects JSON.");
             
             try {
                 const aspects = JSON.parse(jsonText);
                 return Array.isArray(aspects) ? aspects : [];
             } catch (e) {
-                console.warn("Failed to parse aspects array, returning empty:", jsonText);
                 return [];
             }
         }
 
-        // 4. Generate Customer Response (Text Generation - UTILITY FEATURE)
+        // 4. Generate Customer Response Draft
         async function generateResponseDraft(review, sentiment) {
             const language = languageSelector.value;
             const systemInstruction = (sentiment === 'POSITIVE') 
@@ -624,25 +573,14 @@
             const userPrompt = `Draft a customer service response to the following review: "${review}"`;
             
             const payload = {
-                task: "draft", // Task identifier
                 contents: [{ parts: [{ text: userPrompt }] }],
                 systemInstruction: {
                     parts: [{ text: systemInstruction }]
                 }
             };
 
-            const response = await fetchWithRetry(ANALYZE_ENDPOINT, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
+            const response = await fetchWithRetry(payload);
             const result = await response.json();
-
-            if (result.error) {
-                throw new Error(result.error.message || "Backend returned an error.");
-            }
-
             return result.candidates?.[0]?.content?.parts?.[0]?.text || "Could not generate a response draft.";
         }
 
@@ -670,7 +608,6 @@
                     icon = '❓';
             }
             
-            // Apply color to the border and a powerful glow
             sentimentOutput.style.borderColor = color;
             sentimentOutput.style.boxShadow = `0 0 20px ${color}80`; 
 
@@ -691,7 +628,7 @@
         }
 
         function renderAspects(aspects) {
-            topicsOutput.innerHTML = ''; // Clear previous chips
+            topicsOutput.innerHTML = '';
             if (aspects.length === 0) {
                 topicsOutput.innerHTML = `<p class="text-text-muted">No distinct key aspects were found.</p>`;
                 return;
@@ -712,61 +649,102 @@
         function renderSentimentChart(sentimentCounts) {
             const labels = ['POSITIVE', 'NEGATIVE', 'NEUTRAL'];
             const data = labels.map(label => sentimentCounts[label] || 0);
-            const colors = [CHART_COLORS.POSITIVE, CHART_COLORS.NEGATIVE, CHART_COLORS.NEUTRAL];
+            
+            // Define colors locally for clarity
+            const colors = {
+                POSITIVE: '#22c55e', 
+                NEGATIVE: '#ef4444', 
+                NEUTRAL: '#facc15'
+            };
 
-            // Destroy previous chart instance if it exists
             if (sentimentChartInstance) {
                 sentimentChartInstance.destroy();
             }
 
             const ctx = document.getElementById('sentiment-chart').getContext('2d');
+            
+            // Create Gradients for "Cyberpunk" look
+            const gradientPos = ctx.createLinearGradient(0, 0, 0, 300);
+            gradientPos.addColorStop(0, 'rgba(34, 197, 94, 0.9)');
+            gradientPos.addColorStop(1, 'rgba(34, 197, 94, 0.1)');
+
+            const gradientNeg = ctx.createLinearGradient(0, 0, 0, 300);
+            gradientNeg.addColorStop(0, 'rgba(239, 68, 68, 0.9)');
+            gradientNeg.addColorStop(1, 'rgba(239, 68, 68, 0.1)');
+
+            const gradientNeu = ctx.createLinearGradient(0, 0, 0, 300);
+            gradientNeu.addColorStop(0, 'rgba(250, 204, 21, 0.9)');
+            gradientNeu.addColorStop(1, 'rgba(250, 204, 21, 0.1)');
+
+            const gradients = [gradientPos, gradientNeg, gradientNeu];
+            const borderColors = [colors.POSITIVE, colors.NEGATIVE, colors.NEUTRAL];
+
             sentimentChartInstance = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: labels,
                     datasets: [{
+                        label: 'Review Count',
                         data: data,
-                        backgroundColor: colors.map(c => `${c}B0`), // Semi-transparent for glow effect
-                        borderColor: colors,
+                        backgroundColor: gradients,
+                        borderColor: borderColors,
                         borderWidth: 2,
-                        borderRadius: 6,
+                        borderRadius: 8, // Rounded bars
+                        borderSkipped: false, // Rounded on bottom too
+                        barThickness: 50,
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: {
+                        duration: 1500,
+                        easing: 'easeOutQuart'
+                    },
                     plugins: {
-                        legend: {
-                            display: false,
-                        },
-                        title: {
-                            display: false,
-                        },
+                        legend: { display: false },
                         tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return `Reviews: ${context.parsed.y}`;
-                                }
-                            },
-                            backgroundColor: '#1A1A22',
-                            borderColor: '#A32DFF',
-                            borderWidth: 1,
+                            backgroundColor: 'rgba(26, 26, 34, 0.95)',
                             titleColor: '#e0e0e0',
                             bodyColor: '#e0e0e0',
+                            borderColor: '#A32DFF',
+                            borderWidth: 1,
+                            padding: 14,
+                            cornerRadius: 8,
+                            displayColors: false,
+                            titleFont: { family: "'Courier New', monospace", size: 14 },
+                            bodyFont: { family: "'Courier New', monospace", size: 14 },
+                            callbacks: {
+                                label: function(context) {
+                                    return `> ${context.parsed.y} REVIEWS`;
+                                }
+                            }
                         }
                     },
                     scales: {
                         x: {
-                            grid: { color: '#333333' },
-                            ticks: { color: '#e0e0e0' }
+                            grid: { display: false },
+                            ticks: { 
+                                color: '#e0e0e0',
+                                font: {
+                                    family: "'Courier New', monospace",
+                                    size: 13,
+                                    weight: 'bold'
+                                }
+                            }
                         },
                         y: {
                             beginAtZero: true,
-                            grid: { color: '#333333' },
+                            grid: { 
+                                color: 'rgba(255, 255, 255, 0.05)', 
+                                borderDash: [4, 4] 
+                            },
                             ticks: { 
-                                color: '#e0e0e0',
-                                precision: 0 
-                            }
+                                color: '#a0a0a0',
+                                font: { family: "monospace" },
+                                precision: 0
+                            },
+                            border: { display: false }
                         }
                     }
                 }
@@ -779,9 +757,8 @@
             const csv = data.map(row => 
                 row.map(cell => {
                     let s = String(cell);
-                    // If the cell contains comma or quotes, enclose it in double quotes
                     if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-                        s = s.replace(/"/g, '""'); // Escape double quotes
+                        s = s.replace(/"/g, '""');
                         return `"${s}"`;
                     }
                     return s;
@@ -798,27 +775,18 @@
                     try {
                         const csvText = e.target.result;
                         const lines = csvText.split('\n').filter(line => line.trim() !== '');
-                        if (lines.length < 2) {
-                            throw new Error("CSV must contain a header and at least one review.");
-                        }
+                        if (lines.length < 2) throw new Error("CSV must contain a header and at least one review.");
 
-                        // Robustly parse header row
                         const headerLine = lines[0].trim();
-                        const header = headerLine.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g)
-                            .map(h => h.replace(/^"|"$/g, '').trim().toLowerCase());
+                        const header = headerLine.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g).map(h => h.replace(/^"|"$/g, '').trim().toLowerCase());
                             
                         const reviewColumnIndex = header.indexOf('review') !== -1 ? header.indexOf('review') : header.indexOf('text');
+                        if (reviewColumnIndex === -1) throw new Error("CSV file must contain a column named 'review' or 'text'.");
 
-                        if (reviewColumnIndex === -1) {
-                            throw new Error("CSV file must contain a column named 'review' or 'text'.");
-                        }
-
-                        // Parse data rows
                         const originalData = lines.slice(1).map(line => {
                             if (!line.trim()) return null;
                             const cells = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g);
                             if (!cells) return {};
-
                             const values = cells.map(cell => cell.replace(/^"|"$/g, '').trim());
                             let obj = {};
                             header.forEach((h, i) => obj[h] = values[i] || "");
@@ -827,13 +795,11 @@
 
                         totalBatchItems = originalData.length;
                         processedBatchItems = 0;
-                        // UPDATED header for aspect sentiment and error logging
                         batchResults = [header.concat(['llm_sentiment', 'llm_confidence', 'llm_summary', 'llm_topics', 'llm_aspect_sentiment', 'llm_error_details'])]; 
 
                         for (const item of originalData) {
                             const review = item[header[reviewColumnIndex]];
                             
-                            // Skip if review is too short
                             if (!review || review.split(/\s+/).filter(word => word.length > 0).length < 20) {
                                 batchResults.push(Object.values(item).concat(['N/A', 'N/A', 'Review too short or empty', 'N/A', 'N/A', 'Skipped: Review too short.']));
                                 processedBatchItems++;
@@ -841,20 +807,15 @@
                             }
 
                             try {
-                                // Run all three API calls concurrently
                                 const [sentimentResult, summaryText, aspectsArray] = await Promise.all([
                                     getSentiment(review),
                                     getSummary(review),
-                                    getAspects(review) // Now gets structured aspects with sentiment
+                                    getAspects(review)
                                 ]);
                                 
-                                // Aggregate sentiment count
                                 const sentimentUpper = sentimentResult.sentiment.toUpperCase();
-                                if (sentimentCounts.hasOwnProperty(sentimentUpper)) {
-                                    sentimentCounts[sentimentUpper]++;
-                                }
+                                if (sentimentCounts.hasOwnProperty(sentimentUpper)) sentimentCounts[sentimentUpper]++;
 
-                                // Separate topics and aspect sentiments for CSV output
                                 const topicsString = aspectsArray.map(a => a.topic).join('; ');
                                 const aspectSentimentString = aspectsArray.map(a => `${a.topic}:${a.sentiment}`).join('; ');
 
@@ -864,19 +825,19 @@
                                     summaryText,
                                     topicsString,
                                     aspectSentimentString,
-                                    'SUCCESS' // Log SUCCESS for good run
+                                    'SUCCESS'
                                 ]);
                                 batchResults.push(rowData);
                             } catch (apiError) {
                                 console.error("Batch item API error:", apiError);
-                                sentimentCounts.FAILED++; // Track failed items
-                                
-                                // Capture detailed error message
+                                sentimentCounts.FAILED++;
                                 const errorLog = String(apiError).replace(/Error: /, '').replace(/,/g, ';'); 
-
                                 batchResults.push(Object.values(item).concat(['ERROR', '0.00', 'API analysis failed for this item.', 'ERROR', 'ERROR', errorLog]));
                             }
                             processedBatchItems++;
+                            
+                            // Small delay to be polite to rate limits in batch loop
+                            await new Promise(r => setTimeout(r, 500));
                         }
                         resolve(sentimentCounts);
                     } catch (error) {
@@ -888,22 +849,18 @@
             });
         }
 
-
         // --- MAIN EVENT HANDLER ---
 
         analyzeBtn.addEventListener('click', async () => {
-            // Reset state
             resultsCard.classList.add('hidden');
             resultsCard.classList.remove('animate-result-show');
             loadingDiv.classList.remove('hidden');
             messageBox.classList.add('hidden');
             
-            // Start the interactive progress bar
             startProgressSimulation();
             
             try {
                 if (currentMode === 'single') {
-                    // --- SINGLE MODE EXECUTION (Sentiment, Summary, and Aspects) ---
                     const review = reviewInput.value.trim();
                     const wordCount = review.split(/\s+/).filter(word => word.length > 0).length;
 
@@ -914,7 +871,6 @@
                         return;
                     }
                     
-                    // Run three primary API calls concurrently
                     const [sentimentResult, summaryText, aspectsArray] = await Promise.all([
                         getSentiment(review),
                         getSummary(review),
@@ -924,27 +880,22 @@
                     completeProgressSimulation();
                     renderSentiment(sentimentResult.sentiment, sentimentResult.confidence_score);
                     renderSummary(summaryText);
-                    renderAspects(aspectsArray); // Render detailed aspects with sentiment
+                    renderAspects(aspectsArray);
                     
-                    // Store sentiment for response generation button
                     suggestResponseBtn.dataset.sentiment = sentimentResult.sentiment;
 
-                    // Show single results view
                     batchSummaryArea.classList.add('hidden');
                     singleAnalysisArea.classList.remove('hidden');
                     resultsCard.classList.remove('hidden');
                     resultsCard.classList.add('animate-result-show'); 
                     showMessage("TASK_COMPLETE: Analysis executed successfully.", 'success');
                     
-                    // Reset suggestion draft state
                     responseDraftOutput.classList.add('hidden');
                     responseDraftOutput.textContent = '';
                     suggestResponseBtn.disabled = false;
                     suggestResponseBtn.textContent = 'Generate Response Draft ✨';
 
-
                 } else {
-                    // --- BATCH MODE EXECUTION (CSV) ---
                     const file = csvFileInput.files[0];
                     if (!file) {
                         completeProgressSimulation();
@@ -954,28 +905,25 @@
                     }
                     
                     showMessage("BATCH_MODE: Initiating file upload and processing...", 'info');
-                    const sentimentCounts = await processBatch(file); // Get counts from batch processor
+                    const sentimentCounts = await processBatch(file);
                     completeProgressSimulation();
                     
-                    // Render the chart
                     renderSentimentChart(sentimentCounts);
 
-                    // Create Blob and link for download
                     const csvBlob = csvToBlob(batchResults);
                     const url = URL.createObjectURL(csvBlob);
                     downloadLink.href = url;
                     
-                    // Show batch results view
                     singleAnalysisArea.classList.add('hidden');
                     batchSummaryArea.classList.remove('hidden');
                     
                     const failedCount = sentimentCounts.FAILED;
-                    const successCount = totalBatchItems - failedCount - (totalBatchItems - processedBatchItems); // Adjust for skipped
-                    const totalProcessed = processedBatchItems;
+                    const successCount = totalBatchItems - failedCount - (totalBatchItems - processedBatchItems);
+                    
                     batchStatusText.innerHTML = `
                         Analyzed: <span class="text-accent-purple font-bold">${successCount}</span>
                         | Failed: <span class="text-red-400 font-bold">${failedCount}</span>
-                        | Total: <span class="text-text-light font-bold">${totalProcessed}</span>
+                        | Total: <span class="text-text-light font-bold">${processedBatchItems}</span>
                         <br>Download the annotated file below.`;
 
                     resultsCard.classList.remove('hidden');
@@ -987,12 +935,11 @@
                 console.error("Analysis Failed:", error);
                 completeProgressSimulation();
                 loadingDiv.classList.add('hidden');
-                // Display the error message from the backend
                 showMessage(`ERROR: ${error.message || 'API or processing failed.'}`, 'error');
             }
         });
 
-        // --- RESPONSE SUGGESTION HANDLER (NEW) ---
+        // --- RESPONSE SUGGESTION HANDLER ---
         suggestResponseBtn.addEventListener('click', async () => {
             const review = reviewInput.value.trim();
             const sentiment = suggestResponseBtn.dataset.sentiment;
@@ -1013,7 +960,6 @@
                 responseDraftOutput.classList.remove('hidden');
                 showMessage("RESPONSE_DRAFT: Draft generated successfully.", 'success');
             } catch (error) {
-                console.error("Draft Generation Failed:", error);
                 responseDraftOutput.textContent = "Error generating draft response.";
                 responseDraftOutput.classList.remove('hidden');
                 showMessage("ERROR: Could not generate response draft.", 'error');
@@ -1023,7 +969,6 @@
                 suggestResponseBtn.textContent = 'Generate Response Draft ✨';
             }
         });
-
     </script>
 </body>
 </html>
